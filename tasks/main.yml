@@ -1,0 +1,108 @@
+---
+# Ansible role
+#
+# Deploy MunkiReport web application
+
+
+
+- name: Deploy app
+  block:
+    - name: Deploy from git
+      environment: '{{ proxy_env | default({}) }}'
+      git:
+        repo: '{{ munkireport.repo }}'
+        dest: '{{ munkireport.webroot }}'
+        version: '{{ munkireport.version | default(omit) }}'
+        force: true
+
+    - name: Change ownership
+      file:
+        path: '{{ munkireport.webroot }}'
+        owner: '{{ munkireport.user }}'
+        group: '{{ munkireport.group }}'
+        state: directory
+        recurse: true
+
+  when: update | default(false) | bool
+  tags:
+    - munkireport-deploy
+
+
+- name: Generate configuration
+  block:
+    - name: Create .env config file
+      template:
+        src: 'env.j2'
+        dest: '{{ munkireport.webroot }}/.env'
+        owner: '{{ munkireport.user }}'
+        group: '{{ munkireport.group }}'
+        mode: '0660'
+      tags:
+        - munkireport-config
+
+    - name: Add extra modules
+      template:
+        src: 'composer.local.json.j2'
+        dest: '{{ munkireport.webroot }}/composer.local.json'
+        owner: '{{ munkireport.user }}'
+        group: '{{ munkireport.group }}'
+        mode: '0660'
+
+    - name: Generate local users
+      template:
+        src: 'local_user.j2'
+        dest: '{{ munkireport.webroot }}/local/users/{{ item.name }}.yml'
+        owner: '{{ munkireport.user }}'
+        group: '{{ munkireport.group }}'
+        mode: '0660'
+      loop: '{{ munkireport.auth.local_users }}'
+
+    - name: Generate dashboards
+      template:
+        src: 'dashboard.j2'
+        dest: '{{ munkireport.webroot }}/local/dashboards/{{ item.name }}.yml'
+        owner: '{{ munkireport.user }}'
+        group: '{{ munkireport.group }}'
+        mode: '0660'
+      loop: '{{ munkireport.dashboards }}'
+
+  tags:
+    - munkireport-config
+
+
+- name: Finish app deployment/upgrade
+  block:
+    - name: Put app into maintenance mode
+      file:
+        path: '{{ munkireport.webroot }}/storage/framework/down'
+        state: 'touch'
+        owner: '{{ munkireport.user }}'
+        group: '{{ munkireport.group }}'
+
+    - name: Backup database
+      mysql_db:
+        state: 'dump'
+        name: '{{ munkireport.database.name }}'
+        target: '{{ munkireport.database.dump_path }}'
+
+    - name: Install dependencies
+      environment: '{{ proxy_env | default({}) }}'
+      composer:
+        command: 'update'
+        working_dir: '{{ munkireport.webroot }}'
+      become_user: '{{ munkireport.user }}'
+
+    - name: Upgrade DB
+      command: '/usr/bin/php {{ munkireport.webroot }}/please migrate'
+      become_user: '{{ munkireport.user }}'
+
+    - name: Put app into normal mode
+      file:
+        path: '{{ munkireport.webroot }}/storage/framework/down'
+        state: absent
+
+  when: update | default(false) | bool
+  tags:
+    - munkireport-upgrade
+
+...

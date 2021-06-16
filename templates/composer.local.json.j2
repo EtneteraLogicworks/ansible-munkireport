@@ -1,0 +1,8 @@
+{
+    "require": {
+{% for module in munkireport.modules.extra | default([]) %}
+        "{{ module.vendor }}/{{ module.name }}": "{{ module.requirement }}"{% if not loop.last %},{% endif %}
+
+{% endfor %}
+    }
+}

@@ -1,0 +1,27 @@
+---
+# Ansible vars
+#
+# Default variables for munkireport role
+
+munkireport:
+  repo: 'https://github.com/munkireport/munkireport-php.git'
+  user: 'www-data'
+  group: 'www-data'
+  auth:
+    local_users: []
+    methods:
+      - 'LOCAL'
+    ad:
+      schema: 'ActiveDirectory'
+      port: 389
+      tls: true
+  site:
+    name: 'MunkiReport'
+  database:
+    driver: 'mysql'
+    host: '127.0.0.1'
+    port: 3306
+    engine: 'InnoDB'
+    dump_path: '/var/backups/munkireport_preupgrade.sql'
+
+...
